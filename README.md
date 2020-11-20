@@ -9,7 +9,7 @@ Integrate CKEditor for Yii 2 framework, and integrate `codesnippet`, `mentions` 
 
 **NOTE:** There are some customized integration, please see the following documentation.
 
-## Configure CKEditor
+## 1. Configure CKEditor
 
 ### Configure Mentions
 
@@ -62,7 +62,6 @@ CKEDITOR.editorConfig = function( config ) {
 }
 ```
 
-
 #### Configuration Reference
 
 ```javascript
@@ -103,7 +102,133 @@ CKEDITOR.replace( 'editor1', {
 * [Mentions, Tags and Emoji](https://ckeditor.com/docs/ckeditor4/latest/examples/mentions.html#!/guide/dev_mentions.html)
 
 
-## Integrate CKFinder
+#### Implement `mention` controller
+
+```php
+<?php
+
+namespace app\controllers;
+
+use Yii;
+use yii\web\Controller;
+use yii\web\NotFoundHttpException;
+use yii\filters\VerbFilter;
+use yii\filters\AccessControl;
+use app\models\Member;
+use app\models\FreshdeskTicket;
+
+/**
+ * MentionController implements the CRUD actions for mention model.
+ */
+class MentionController extends BaseController
+{
+    /**
+     * {@inheritdoc}
+     */
+    public function behaviors()
+    {
+        return [
+            'access' => [
+                'class' => AccessControl::className(),
+                'rules' => [
+                    [
+                        'actions' => [
+                            'users', 'tickets'
+                        ],
+                        'allow' => true,
+                        'roles' => [
+                            'Administrator', 'Manager', 'OperationsDirector', 'Finance', 'HR',
+                            'TeamLeader', 'TechLeader', 'Developer', 'QALeader', 'QA', 'BA', 'PM',
+                            'TicketManager', 'StoreAdmin', 'SystemAdmin', 'Finance',
+                        ],
+                        //'roles' => ['?'],
+                    ],
+                    [
+                        'allow' => false,
+                        'roles' => ['*'],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Query users
+     * @param string $name
+     * @return array
+     */
+    public function actionUsers($name = '')
+    {
+        \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        $query = Member::find()
+            ->andWhere("is_active = 1 AND username != 'admin'")
+            ->limit(10);
+
+        if ($name) {
+            $query->andWhere("english_name LIKE '%" . $name . "%'");
+        }
+
+        $models = $query->all();
+
+        $users = [];
+        if ($models) {
+            foreach ($models AS $model) {
+                $users[] = [
+                    'id' => $model->id,
+                    'name' => $model->english_name,
+                    'fullname' => $model->name,
+                    'fullEnglishName' => $model->getFullEnglishName(),
+                    'email' => $model->email,
+                    'avatar' => $model->getAvatar(),
+                ];
+            }
+        }
+
+        return $users;
+    }
+
+    /**
+     * Query tickets
+     * @param string $name
+     * @return array
+     */
+    public function actionTickets($name = '')
+    {
+        \Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+
+        $query = FreshdeskTicket::find()
+            ->limit(10)
+            ->orderBy('id DESC');
+
+        if ($name) {
+            $query->where("subject LIKE '%" . $name . "%' OR ticket_id LIKE '%" . $name . "%' OR tp_id LIKE '%" . $name . "%'");
+        }
+
+        $models = $query->all();
+
+        $tickets = [];
+        if ($models) {
+            foreach ($models AS $model) {
+                $tickets[] = [
+                    'id' => $model->id,
+                    'region' => $model->project_id == 8 ? 'AP' : 'LAM',
+                    'name' => 'FD-' . $model->ticket_id . ': ' . $model->subject,
+                    'fd_id' => $model->ticket_id,
+                    'fd_link' => \app\components\AppHelper::getFreshdeskUrl($model->project_id, $model->ticket_id),
+                    'tp_id' => $model->tp_id,
+                    'tp_link' => $model->tp_id ? $model->getTpLink() : '',
+                ];
+            }
+        }
+
+        return $tickets;
+    }
+}
+```
+
+
+## 2. Integrate CKFinder
 
 1) Download latest `CKFinder` (e.g: `CKFinder 3.5.1.1 for PHP`) from [CKFinder download](https://ckeditor.com/ckfinder/download/) page, then unzip and put it under `web` folder, like this:
 
